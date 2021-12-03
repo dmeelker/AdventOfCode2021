@@ -1,7 +1,7 @@
-use std::fs;
+use std::{fs};
 
 fn main() {
-    let lines = parse_input("input.txt");
+    let lines = parse_input("input2.txt");
     let part1 = part1(&lines);
     let part2 = part2(&lines);
 
@@ -9,19 +9,9 @@ fn main() {
 }
 
 fn part1(lines: &[String]) -> usize {
-    let mut gamma = String::new();
-    let mut epsilon = String::new();
-
-    for i in 0..lines[0].len() {
-        let common_bit = find_most_common_bit(lines, i).unwrap();
-        let least_common_bit = !common_bit;
-
-        gamma.push(format_bit(common_bit));
-        epsilon.push(format_bit(least_common_bit));
-    }
-
+    let gamma: String = (0..lines[0].len()).map(|i| format_bit(find_most_common_bit(lines, i).unwrap())).collect();
     let gamma = parse_binary(gamma.as_str());
-    let epsilon = parse_binary(epsilon.as_str());
+    let epsilon = gamma ^ (2_usize.pow(lines[0].len() as u32) - 1);
 
     gamma * epsilon
 }
