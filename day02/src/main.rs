@@ -6,24 +6,24 @@ struct Command {
 }
 
 fn main() {
-    let input = fs::read_to_string("input.txt").unwrap();
-    let commands = parse_input(&input);
+    let commands = parse_input("input.txt");
     let part1 = part1(&commands);
     let part2 = part2(&commands);
 
     println!("Part 1: {} Part 2: {}", part1, part2);
 }
 
-fn parse_input(input: &str) -> Vec<Command> {
+fn parse_input(file: &str) -> Vec<Command> {
+    let input = fs::read_to_string(file).unwrap();
     input.lines().map(parse_input_line).collect()
 }
 
 fn parse_input_line(line: &str) -> Command {
-    let mut parts = line.split(' ');
-    let command = String::from(parts.next().unwrap());
-    let value = parts.next().unwrap().parse().unwrap();
-
-    Command { command, value }
+    let parts: Vec<&str> = line.split(' ').collect();
+    Command { 
+        command: String::from(parts[0]),
+        value: parts[1].parse().unwrap() 
+    }
 }
 
 fn part1(commands: &[Command]) -> i32 {
