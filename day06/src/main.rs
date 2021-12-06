@@ -1,5 +1,4 @@
 use std::fs;
-use itertools::Itertools;
 
 fn main() {
     let input = fs::read_to_string("input.txt").unwrap();
@@ -11,23 +10,23 @@ fn main() {
     println!("Part 1: {} Part 2: {}", part1, part2);
 }
 
-fn parse_input(input: &str) -> Vec<i32> {
+fn parse_input(input: &str) -> Vec<usize> {
     input.split(',').map(|p| p.parse().unwrap()).collect()
 }
 
-fn part1(values: &[i32]) -> usize {
+fn part1(values: &[usize]) -> usize {
     simulate_fish(values, 80)
 }
 
-fn part2(values: &[i32]) -> usize {
+fn part2(values: &[usize]) -> usize {
     simulate_fish(values, 256)
 }
 
-fn simulate_fish(values: &[i32], days: usize) -> usize {
-    let mut fish: [usize; 9] = [0; 9];
+fn simulate_fish(values: &[usize], days: usize) -> usize {
+    let mut fish = [0_usize; 9];
 
-    for group in values.iter().counts_by(|v| v).iter() {
-        fish[**group.0 as usize] = *group.1;
+    for age in values {
+        fish[*age] += 1;
     }
 
     (0..days).fold(fish, |fish, _| simulate_day(&fish))
@@ -35,12 +34,9 @@ fn simulate_fish(values: &[i32], days: usize) -> usize {
 }
 
 fn simulate_day(input: &[usize; 9]) -> [usize; 9] {
-    let mut new_fish: [usize; 9] = [0; 9];
+    let mut new_fish = [0_usize; 9];
 
-    for i in 1..input.len() {
-        new_fish[i-1] = input[i];
-    }
-
+    new_fish[..(input.len() - 1)].clone_from_slice(&input[1..]);
     new_fish[8] = input[0];
     new_fish[6] += input[0];
     new_fish
