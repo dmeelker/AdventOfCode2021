@@ -1,8 +1,8 @@
-use std::{fs, collections::HashMap};
+use std::fs;
 use itertools::Itertools;
 
 fn main() {
-    let input = fs::read_to_string("input2.txt").unwrap();
+    let input = fs::read_to_string("input.txt").unwrap();
     let values = parse_input(&input);
 
     let part1 = part1(&values);
@@ -16,81 +16,32 @@ fn parse_input(input: &str) -> Vec<i32> {
 }
 
 fn part1(values: &[i32]) -> usize {
-    let mut fish = values.to_vec();
-
-    for day in 0..80 {
-        //println!("Day {}: {:?}", day, fish);
-        for i in 0..fish.len() {
-            let mut current_fish = fish[i];
-            current_fish -= 1;
-
-            if current_fish == -1 {
-                current_fish = 6;
-                fish.push(8);
-            }
-
-            fish[i] = current_fish;
-        } 
-
-        
-    }
-
-    fish.len()
+    simulate_fish(values, 80)
 }
 
 fn part2(values: &[i32]) -> usize {
-    let mut fish: HashMap<i32, usize> = HashMap::new();
-    println!("{:?}", values);
-    println!("{:?}", values.iter().counts_by(|v| v));
-    
-    for entry in values.iter().counts_by(|v| v).iter() {
-        fish.insert(**entry.0, *entry.1);
-    }
-
-    for day in 0..18 {
-        let mut new_fish: HashMap<i32, usize> = HashMap::new();
-        println!("Day {}: {:?}", day, fish);
-        for entry in fish.iter() {
-            let mut age = *entry.0;
-            let fish = *entry.1;
-       
-            age -= 1;
-
-            if age == -1 {
-                age = 6;
-                //fish.push(8);
-
-                new_fish.insert(8, new_fish.get(&8).unwrap_or(&0) + 1);
-                //new_fish[&8] = new_fish.get(&8).unwrap_or(&0) + 1;
-            }
-
-            new_fish.insert(age, new_fish.get(&age).unwrap_or(&0) + fish);
-            //new_fish[&age] = new_fish.get(&age).unwrap_or(&0) + fish;
-        } 
-
-        fish = new_fish;
-    }
-
-    fish.values().sum()
+    simulate_fish(values, 256)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+fn simulate_fish(values: &[i32], days: usize) -> usize {
+    let mut fish: [usize; 9] = [0; 9];
 
-    #[test]
-    fn part1_should_work() {
-        let input = vec![String::from("123")];
-        let result = part1(&input);
-
-        assert_eq!(1, result);
+    for group in values.iter().counts_by(|v| v).iter() {
+        fish[**group.0 as usize] = *group.1;
     }
 
-    #[test]
-    fn part2_should_work() {
-        let input = vec![String::from("123")];
-        let result = part2(&input);
+    (0..days).fold(fish, |fish, _| simulate_day(&fish))
+        .iter().sum()
+}
 
-        assert_eq!(2, result);
+fn simulate_day(input: &[usize; 9]) -> [usize; 9] {
+    let mut new_fish: [usize; 9] = [0; 9];
+
+    for i in 1..input.len() {
+        new_fish[i-1] = input[i];
     }
+
+    new_fish[8] = input[0];
+    new_fish[6] += input[0];
+    new_fish
 }
