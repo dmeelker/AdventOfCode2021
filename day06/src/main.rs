@@ -35,7 +35,7 @@ fn simulate_fish(values: &[usize], days: usize) -> usize {
 
 fn simulate_day(input: &[usize; 9]) -> [usize; 9] {
     let mut new_fish = [0_usize; 9];
-
+    
     new_fish[..(input.len() - 1)].clone_from_slice(&input[1..]);
     new_fish[8] = input[0];
     new_fish[6] += input[0];
