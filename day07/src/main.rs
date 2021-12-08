@@ -17,9 +17,10 @@ fn parse_input(input: &str) -> Vec<i32> {
 fn part1(values: &[i32]) -> i32 {
     let min = *values.iter().min().unwrap();
     let max = *values.iter().max().unwrap();
-
+    
     (min..max)
-        .map(|i| values.iter().map(|v| (v - i).abs()).sum())
+        .map(|i| values.iter().map(|v| 
+            (v - i).abs()).sum())
         .min().unwrap()
 }
 
@@ -28,11 +29,14 @@ fn part2(values: &[i32]) -> i32 {
     let max = *values.iter().max().unwrap();
 
     (min..max)
-        .map(|i| values.iter().map(|v| {
-            let cost = (v - i).abs();
-            (cost * (cost+1)) / 2
-        }).sum())
+        .map(|i| values.iter().map(|v|
+                triangular_number((v - i).abs()))
+            .sum())
         .min().unwrap()
+}
+
+fn triangular_number(size: i32) -> i32 {
+    (size * (size+1)) / 2
 }
 
 #[cfg(test)]
