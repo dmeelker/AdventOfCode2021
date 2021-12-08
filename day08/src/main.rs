@@ -1,8 +1,13 @@
-use std::fs;
+use std::{fs, collections::HashSet};
 use itertools::Itertools;
 
+struct Entry {
+    signals: Vec<String>,
+    output: Vec<String>
+}
+
 fn main() {
-    let input = fs::read_to_string("input.txt").unwrap();
+    let input = fs::read_to_string("input2.txt").unwrap();
     let values = parse_input(&input);
 
     let part1 = part1(&values);
@@ -11,15 +16,30 @@ fn main() {
     println!("Part 1: {} Part 2: {}", part1, part2);
 }
 
-fn parse_input(input: &str) -> Vec<String> {
-    input.lines().map(String::from).collect()
+fn parse_input(input: &str) -> Vec<Entry> {
+    input.lines().map(parse_line).collect()
 }
 
-fn part1(values: &[String]) -> i32 {
-    1
+fn parse_line(line: &str) -> Entry {
+    let parts = line.split('|').collect_vec();
+
+    Entry { 
+        signals: parts[0].trim().split(' ').map(|v| String::from(v)).collect_vec(), 
+        output: parts[1].trim().split(' ').map(|v| String::from(v)).collect_vec(), 
+    }
 }
 
-fn part2(values: &[String]) -> i32 {
+fn part1(entries: &[Entry]) -> usize {
+    let x= entries.iter().map(|entry| 
+        let lengths: HashSet<usize> = entry.output.iter().map(|v| v.len()).collect();
+
+        entry.output.iter().filter(|output| vec![2, 4, 3, 7].contains(&(output.len() as i32))).count()
+    ); //.sum()
+    x.sum()
+    //1
+}
+
+fn part2(values: &[Entry]) -> i32 {
     2
 }
 
