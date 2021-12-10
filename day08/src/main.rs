@@ -1,4 +1,4 @@
-use std::{fs, collections::{HashSet, HashMap}};
+use std::{fs, collections::HashMap};
 use itertools::Itertools;
 
 struct Entry {
@@ -81,74 +81,11 @@ fn permutation_valid(signals: &[String], permutation: &HashMap<char, char>) -> b
 }
 
 fn generate_permutations() -> Vec<HashMap<char, char>> {
-    let mut permutations: Vec<HashMap<char, char>> = Vec::new();
     let options = vec!['a', 'b', 'c', 'd', 'e', 'f', 'g'];
-    let mut used_chars = HashSet::new();
-    
-    for i1 in options.iter() {
-        used_chars.clear();
-        used_chars.insert(*i1);
 
-        for i2 in options.iter() {
-            if used_chars.contains(i2) {
-                continue;
-            }
-            used_chars.insert(*i2);
-
-            for i3 in options.iter() {
-                if used_chars.contains(i3) {
-                    continue;
-                }
-                used_chars.insert(*i3);
-
-                for i4 in options.iter() {
-                    if used_chars.contains(i4) {
-                        continue;
-                    }
-                    used_chars.insert(*i4);
-
-                    for i5 in options.iter() {
-                        if used_chars.contains(i5) {
-                            continue;
-                        }
-                        used_chars.insert(*i5);
-
-                        for i6 in options.iter() {
-                            if used_chars.contains(i6) {
-                                continue;
-                            }
-                            used_chars.insert(*i6);
-
-                            for i7 in options.iter() {
-                                if used_chars.contains(i7) {
-                                    continue;
-                                }
-                                used_chars.insert(*i7);
-
-                                let mut mapping = HashMap::new();
-                                mapping.insert(*i1, 'a');
-                                mapping.insert(*i2, 'b');
-                                mapping.insert(*i3, 'c');
-                                mapping.insert(*i4, 'd');
-                                mapping.insert(*i5, 'e');
-                                mapping.insert(*i6, 'f');
-                                mapping.insert(*i7, 'g');
-                                permutations.push(mapping);
-
-                                used_chars.remove(i7);
-                            }
-                            used_chars.remove(i6);
-                        }
-                        used_chars.remove(i5);
-                    }
-                    used_chars.remove(i4);
-                }
-                used_chars.remove(i3);
-            }
-            used_chars.remove(i2);
-        }
-    }
-    permutations
+    options.iter().permutations(7).map(|p| {
+        p.iter().enumerate().map(|e| (**e.1, options[e.0])).collect()
+    }).collect_vec()
 }
 
 #[cfg(test)]

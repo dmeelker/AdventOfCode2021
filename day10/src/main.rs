@@ -1,6 +1,11 @@
 use std::fs;
 use itertools::Itertools;
 
+enum Line {
+    Corrupt{last_char: char},
+    Incomplete{stack: Vec<char>}
+}
+
 fn main() {
     let input = fs::read_to_string("input.txt").unwrap();
     let values = parse_input(&input);
@@ -16,25 +21,37 @@ fn parse_input(input: &str) -> Vec<String> {
 }
 
 fn part1(values: &[String]) -> u32 {
-    let mut score = 0;
+    analyse_lines(values).iter().map(|l| match l {
+        Line::Corrupt { last_char} => get_corrupt_char_score(*last_char),
+        _ => 0
+    }).sum()
+}
 
-    for line in values {
+fn analyse_lines(values: &[String]) -> Vec<Line> {
+    let mut result = Vec::new();
+
+    'lineloop: for line in values {
         let mut stack = Vec::new();
 
         for char in line.chars() {
             if "([{<".contains(char) {
                 stack.push(char);
-            } else if ")]}>".contains(char) {
+            } else {
                 let open = stack.pop().unwrap();
 
                 if !equal_type(open, char) {
-                    score += get_part1_score(char);
+                    result.push(Line::Corrupt{ last_char: char});
+                    continue 'lineloop;
                 }
             }
         }
+
+        if !stack.is_empty() {
+            result.push(Line::Incomplete { stack });
+        }
     }
 
-    score
+    result
 }
 
 fn equal_type(c1: char, c2: char) -> bool {
@@ -47,7 +64,7 @@ fn equal_type(c1: char, c2: char) -> bool {
     }
 }
 
-fn get_part1_score(c: char) -> u32 {
+fn get_corrupt_char_score(c: char) -> u32 {
     match c {
         ')' => 3,
         '}' => 57,
@@ -58,34 +75,25 @@ fn get_part1_score(c: char) -> u32 {
 }
 
 fn part2(values: &[String]) -> u64 {
-    let mut scores = Vec::new();
-
-    'lineloop: for line in values {
-        let mut stack = Vec::new();
-
-        for char in line.chars() {
-            if "([{<".contains(char) {
-                stack.push(char);
-            } else if ")]}>".contains(char) {
-                let open = stack.pop().unwrap();
-
-                if !equal_type(open, char) {
-                    // Corrupted line
-                    continue 'lineloop;
-                }
+    let scores = analyse_lines(values).iter()
+        .filter_map(|line| {
+            if let Line::Incomplete{stack} = line {
+                Some(calculate_incomplete_line_score(stack))
+            } else {
+                None
             }
-        }
-
-        if !stack.is_empty() {
-            let line_score: u64 = stack.iter().rev().map(|c| get_part2_score(*c)).fold(0, |acc, value| (acc * 5) + value);
-            scores.push(line_score);
-        }
-    }
+        }).collect_vec();
 
     *scores.iter().sorted().nth(scores.len() / 2).unwrap()
 }
 
-fn get_part2_score(c: char) -> u64 {
+fn calculate_incomplete_line_score(stack: &Vec<char>) -> u64 {
+    stack.iter().rev()
+        .map(|c| get_missing_char_score(*c))
+        .fold(0, |acc, value| (acc * 5) + value)
+}
+
+fn get_missing_char_score(c: char) -> u64 {
     match c {
         '(' => 1,
         '{' => 3,

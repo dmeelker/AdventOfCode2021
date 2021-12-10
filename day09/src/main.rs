@@ -37,7 +37,7 @@ fn part2(values: &[Vec<i32>]) -> i32 {
         .sorted()
         .rev()
         .take(3)
-        .reduce(|a,b| a * b).unwrap()
+        .product()
 }
 
 fn find_low_points(values: &[Vec<i32>]) -> Vec<Point> {
