@@ -11,6 +11,12 @@ struct Point {
     y: i32,
 }
 
+impl Point {
+    fn new(x: i32, y: i32) -> Point {
+        Point {x, y}
+    }
+}
+
 #[derive(Debug)]
 struct Grid {
     width: usize,
@@ -19,7 +25,19 @@ struct Grid {
 }
 
 impl Grid {
-    fn new(data: Vec<Vec<i32>>) -> Grid {
+    fn new(width: usize, height: usize, default: i32) -> Grid {
+        let mut data = Vec::new();
+
+        for _ in 0..height {
+            let mut column = Vec::new();
+            column.resize(width, default);
+            data.push(column);
+        }
+
+        Grid { width, height, data }
+    }
+
+    fn from_data(data: Vec<Vec<i32>>) -> Grid {
         let width = data[0].len();
         let height = data.len();
 
@@ -34,11 +52,44 @@ impl Grid {
         !(point.x < 0 || point.x >= self.width as i32 || point.y < 0 || point.y >= self.height as i32)
     }
 
+    fn set(&mut self, point: &Point, value: i32) {
+        if self.contains(point) {
+            self.data[point.y as usize][point.x as usize] = value;
+        } else {
+            panic!();
+        }
+    }
+
     fn get(&self, point: &Point) -> Option<i32> {
         if self.contains(point) {
             Some(self.data[point.y as usize][point.x as usize])
         } else {
             None
+        }
+    }
+
+    fn copy_block(&self, target: &mut Grid, source_location: &Point, target_location: &Point, width: usize, height: usize) {
+        for x in source_location.x..source_location.x + width as i32 {
+            for y in source_location.y..source_location.y + height as i32 {
+                let target_location  = Point::new(target_location.x + (x - source_location.x), target_location.y + (y - source_location.y));
+
+                target.set(&target_location, self.get(&Point::new(x, y)).unwrap());
+            }    
+        }
+    }
+
+    fn increment_block(&mut self, location: &Point, width: usize, height: usize) {
+        for x in location.x..location.x + width as i32 {
+            for y in location.y..location.y + height as i32 {
+                let location  = Point::new(x, y);
+                let mut new_value = self.get(&location).unwrap() + 1;
+
+                if new_value > 9 {
+                    new_value = 1;
+                }
+
+                self.set(&location, new_value);
+            }    
         }
     }
 
@@ -66,7 +117,7 @@ impl Grid {
 }
 
 fn main() {
-    let input = fs::read_to_string("input.txt").unwrap();
+    let input = fs::read_to_string("input2.txt").unwrap();
     let grid = parse_input(&input);
     grid.print();
     let part1 = part1(&grid);
@@ -76,39 +127,45 @@ fn main() {
 }
 
 fn parse_input(input: &str) -> Grid {
-    Grid::new(input.lines().map(|line|
+    Grid::from_data(input.lines().map(|line|
         line.chars().map(|c| c.to_string().parse().unwrap()).collect()
     ).collect())
 }
 
-fn part1(values: &Grid) -> i32 {
-    let path = find_best_path(values, &Point {x: 0, y: 0} , &Point{ x: (values.width - 1) as i32, y: (values.height - 1) as i32});
+fn part1(grid: &Grid) -> i32 {
+    let path = find_best_path(grid, &Point {x: 0, y: 0} , &Point{ x: (grid.width - 1) as i32, y: (grid.height - 1) as i32});
 
-    //eprintln!("path = {:?}", path);
-    path.iter().skip(1).map(|p| values.get(p).unwrap()).sum()
-
+    path.iter().skip(1).map(|p| grid.get(p).unwrap()).sum()
 }
 
-fn part2(values: &Grid) -> i32 {
-    let large_grid = prepare_part2_grid(values);
-    //large_grid.print();
-    
+fn part2(grid: &Grid) -> i32 {
+    let grid = prepare_part2_grid(grid);
+    let path = find_best_path(&grid, &Point {x: 0, y: 0} , &Point{ x: (grid.width - 1) as i32, y: (grid.height - 1) as i32});
 
-    let path = find_best_path(&large_grid, &Point {x: 0, y: 0} , &Point{ x: (large_grid.width - 1) as i32, y: (large_grid.height - 1) as i32});
-
-    //eprintln!("path = {:?}", path);
-    path.iter().skip(1).map(|p| large_grid.get(p).unwrap()).sum()
+    path.iter().skip(1).map(|p| grid.get(p).unwrap()).sum()
 }
 
 fn prepare_part2_grid(input: &Grid) -> Grid {
+    let mut grid = Grid::new(input.width*5, input.height*5, 0);
     let mut data = Vec::new();
-    data.reserve(input.height * 5);
 
     for _ in 0..input.height * 5 {
         let mut column = Vec::new();
         column.resize(input.width*5, 0);
         data.push(column);
     }
+
+    for y in 0..5 {
+        for x in 0..5 {
+            input.copy_block(&mut grid, &Point::new(0, 0), &Point::new(x * input.width as i32, y * input.height as i32), input.width, input.height);
+            // let cost_increase = (x / input.width) as i32; 
+            // data[y][x] = ((input.get(&Point {x: (x % input.width) as i32, y: y as i32}).unwrap() - 1 + cost_increase) % 9);
+        }
+    }
+
+    
+
+    grid.print();
 
     for y in 0..input.height {
         for x in 0..input.width * 5 {
@@ -130,7 +187,7 @@ fn prepare_part2_grid(input: &Grid) -> Grid {
         }
     }
 
-    Grid::new(data)
+    Grid::from_data(data)
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
@@ -162,43 +219,32 @@ fn find_best_path(grid: &Grid, start: &Point, end: &Point) -> Vec<Point> {
     }
 
     nodes.entry(*start).and_modify(|node| node.path_cost = 0);
-        println!("Start!");
+
     let mut current_location = *start;
-    let mut step = 1;
+    
     loop {
-        step+=1;
-        // if step % 1000 == 0 {
-        //     println!("Unvisited left: {}/{}", unvisited.len(), nodes.len());
-        // }
-        
-        //eprintln!("current_location = {:?}", current_location);
         let neighbours = get_neighbours(&current_location);
         let neighbours = neighbours.iter().filter(|p| unvisited.contains(*p)).collect_vec();
         let current_node = nodes.get(&current_location).unwrap().clone();
 
         for neighbour in neighbours.iter() {
-            let node = nodes.get_mut(*&neighbour).unwrap();
-            //eprintln!("node.cost = {:?}", node.cost);
-            let cost = current_node.path_cost + node.cost;
-            //eprintln!("Neighbour = {:?} = {}", neighbour, cost);
-            if cost < node.path_cost {
-                node.path_cost = cost;
-                node.path_source = Some(current_location);
-                unvisited_queue.remove(&neighbour);
-                unvisited_queue.push(**neighbour, i32::MAX - node.path_cost);
+            let neighbour_node = nodes.get_mut(*&neighbour).unwrap();
+            let cost = current_node.path_cost + neighbour_node.cost;
+            
+            if cost < neighbour_node.path_cost {
+                neighbour_node.path_cost = cost;
+                neighbour_node.path_source = Some(current_location);
+                unvisited_queue.push_increase(**neighbour, i32::MAX - neighbour_node.path_cost);
             }
         }
 
         unvisited.remove(&current_location);
 
         if current_location == *end {
-            eprintln!("Path found!");
             break;
         }
 
         current_location = unvisited_queue.pop().unwrap().0;
-        // current_location = *unvisited.iter().sorted_by(|a, b| 
-        //     nodes.get(*a).unwrap().path_cost.cmp(&nodes.get(*b).unwrap().path_cost)).next().unwrap();
     }
 
     let mut path = Vec::new();
@@ -239,11 +285,12 @@ mod tests {
         assert_eq!(40, result);
     }
 
-    // #[test]
-    // fn part2_should_work() {
-    //     let input = vec![String::from("123")];
-    //     let result = part2(&input);
+    #[test]
+    fn part2_should_work() {
+        let input = fs::read_to_string("input2.txt").unwrap();
+        let input = parse_input(&input);
+        let result = part2(&input);
 
-    //     assert_eq!(2, result);
-    // }
+        assert_eq!(315, result);
+    }
 }
