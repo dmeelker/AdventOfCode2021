@@ -118,16 +118,12 @@ fn reduce(numbers: &[Number]) -> Vec<Number> {
 
 fn split(numbers: &[Number]) -> Vec<Number> {
     let mut result = numbers.iter().copied().collect_vec();
+    let position = result.iter().position(|number| number.value >= 10);
 
-    for i in 0..result.len() {
-        let number = result[i];
-        
-        if number.value >= 10 {
-            result.remove(i);
-            result.insert(i, Number {depth: number.depth + 1, value: (number.value as f32 / 2.0).floor() as i32});
-            result.insert(i + 1, Number {depth: number.depth + 1, value: (number.value as f32 / 2.0).ceil() as i32});
-            break;
-        }
+    if let Some(position) = position {
+        let number = result.remove(position);
+        result.insert(position, Number {depth: number.depth + 1, value: (number.value as f32 / 2.0).floor() as i32});
+        result.insert(position + 1, Number {depth: number.depth + 1, value: (number.value as f32 / 2.0).ceil() as i32});
     }
 
     result
@@ -135,22 +131,23 @@ fn split(numbers: &[Number]) -> Vec<Number> {
 
 fn explode(numbers: &[Number]) -> Vec<Number> {
     let mut result: Vec<Number> = numbers.iter().copied().collect_vec();
+    let position = result.iter().position(|number| number.depth == 5);
 
-    for i in 0..numbers.len()-1 {
+    if let Some(i) = position {
         let left = result[i];
         let right = result[i+1];
 
-        if left.depth == 5 {
-            if i > 0 {
-                result[i-1].value += left.value;
-            }
-            result[i] = Number {depth: left.depth - 1, value: 0};
-            if i < result.len() - 2 {
-                result[i+2].value += right.value;
-            }
-            result.remove(i+1);
-            break;
+        if i > 0 {
+            result[i-1].value += left.value;
         }
+
+        result[i] = Number {depth: left.depth - 1, value: 0};
+
+        if i < result.len() - 2 {
+            result[i+2].value += right.value;
+        }
+
+        result.remove(i+1); // Remove left value
     }
 
     result
@@ -192,21 +189,19 @@ fn format_numbers(numbers: &[Number]) -> String {
 }
 
 fn format_numbers_pair(numbers: &mut Vec<Number>, depth: i32) -> String {
-    let left_number = numbers[0];
-    let left = if left_number.depth == depth {
-        numbers.remove(0).value.to_string()
-    } else {
-        format_numbers_pair(numbers, depth + (left_number.depth - depth).signum())
-    };
-
-    let right_number = numbers[0];
-    let right = if right_number.depth == depth {
-        numbers.remove(0).value.to_string()
-    } else {
-        format_numbers_pair(numbers, depth + (right_number.depth - depth).signum())
-    };
+    let left = format_number_part(numbers, depth);
+    let right = format_number_part(numbers, depth);
 
     return format!("[{},{}]", left, right);
+}
+
+fn format_number_part(numbers: &mut Vec<Number>, depth: i32) -> String {
+    let number = numbers[0];
+    if number.depth == depth {
+        numbers.remove(0).value.to_string()
+    } else {
+        format_numbers_pair(numbers, depth + (number.depth - depth).signum())
+    }
 }
 
 #[cfg(test)]
