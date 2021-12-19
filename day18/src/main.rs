@@ -1,46 +1,10 @@
-use core::num;
 use std::fs;
 use itertools::Itertools;
 
-#[derive(Debug, Clone)]
-enum Node {
-    Number {value: i32},
-    Pair {left: Box<Node>, right: Box<Node>}
-}
-
-impl Node {
-    fn format(&self) -> String {
-        match self {
-            Node::Number {value} => String::from(value.to_string()),
-            Node::Pair {left, right} => format!("[{},{}]", left.format(), right.format())
-        }
-    }
-
-    fn magnitude(&self) -> usize {
-        match self {
-            Node::Number {value} => *value as usize,
-            Node::Pair {left, right} => (left.magnitude() * 3) + (right.magnitude() * 2),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-enum Token {
-    BracketLeft,
-    BracketRight,
-    Comma,
-    Number {value: i32},
-}
-
-impl Token {
-    fn format(&self) -> String {
-        match self {
-            Token::BracketLeft => String::from("["),
-            Token::BracketRight => String::from("]"),
-            Token::Comma => String::from(","),
-            Token::Number {value} => value.to_string(),
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Number {
+    value: i32,
+    depth: i32,
 }
 
 fn main() {
@@ -58,36 +22,19 @@ fn parse_input(input: &str) -> Vec<String> {
 }
 
 fn part1(lines: &[String]) -> usize {
-    let mut numbers = lines.iter().map(|line| parse_tokens(line)).collect_vec();
-    for n in numbers.iter() {
-        eprintln!("{:?}", format_tokens(n));
-    }
-    println!();
-
-
-    numbers.reverse();
-    let mut added = numbers.pop().unwrap();
+    let mut numbers = lines.iter().map(|line| parse_numbers(line)).collect_vec();
+    let mut added = numbers.remove(0);
 
     while !numbers.is_empty() {
-        let to_add = numbers.pop().unwrap();
-
-        let l = added.iter().copied().collect_vec();
-        let r = to_add.iter().copied().collect_vec();
-
-        added = add_tokens(&added, &to_add);
-        added = reduce(added);
-
-        println!("  {}", format_tokens(&l));
-        println!("+ {}", format_tokens(&r));
-        println!("= {}", format_tokens(&added));
-        println!();
+        let to_add = numbers.remove(0);
+        added = add_and_reduce(&added, &to_add);
     }
-    eprintln!(" = {:?}", format_tokens(&added));
-    parse(&format_tokens(&added)).magnitude()
+
+    magnitude(&added)
 }
 
 fn part2(lines: &[String]) -> usize {
-    let mut numbers = lines.iter().map(|line| parse_tokens(line)).collect_vec();
+    let numbers = lines.iter().map(|line| parse_numbers(line)).collect_vec();
 
     let mut largest_magnitude = 0;
 
@@ -97,8 +44,8 @@ fn part2(lines: &[String]) -> usize {
                 continue;
             }
 
-            let result = reduce(add_tokens(&left_number.1, &right_number.1));
-            let magnitude = parse(&format_tokens(&result)).magnitude();
+            let result = add_and_reduce(left_number.1, right_number.1);
+            let magnitude = magnitude(&result);
 
             largest_magnitude = largest_magnitude.max(magnitude);
         }    
@@ -107,182 +54,159 @@ fn part2(lines: &[String]) -> usize {
     largest_magnitude
 }
 
-fn add(left: Node, right: Node) -> Node {
-    Node::Pair {left: Box::new(left), right: Box::new(right)}
-}
-
-fn reduce(token: Vec<Token>) -> Vec<Token> {
-    let mut tokens = token;
-    loop {
-        let (new_tokens, exploded) = explode(tokens);
-        tokens = new_tokens;
-
-        if exploded {
-            continue;
-        }
-
-        let (new_tokens, split) = split(tokens);
-        tokens = new_tokens;
-
-        if !split {
-            break;
-        }
-    }
-    
-    tokens
-}
-
-fn get_value(token: &Token) -> i32{
-    match token {
-        Token::Number {value} => *value,
-        _ => panic!()
-    }
-}
-
-fn explode(tokens: Vec<Token>) -> (Vec<Token>, bool) {
-    //eprintln!("{}", format_tokens(&tokens));
-    let mut result = tokens.clone();
-
+fn parse_numbers(input: &str) -> Vec<Number> {
+    let mut numbers = Vec::new();
+    let mut accumulator = String::new();
     let mut depth = 0;
-
-    for token in tokens.iter().enumerate() {
-        //eprintln!("token = {:?} (depth: {})", token, depth);
-        match token.1 {
-            Token::BracketLeft =>  {
-                if depth == 4 {
-                    let left = get_value(&tokens[token.0 + 1]);
-                    let right = get_value(&tokens[token.0 + 3]);
-
-                    //eprintln!("left = {:?}", left);
-                    //eprintln!("right = {:?}", right);
-
-                    for i in (0..token.0).rev() {
-                        if let Token::Number {value} = tokens[i] {
-                            result[i] = Token::Number {value: value + left};
-                            break;
-                        }
-                    }
-
-                    for i in token.0+4..tokens.len() {
-                        if let Token::Number {value} = tokens[i] {
-                            result[i] = Token::Number {value: value + right};
-                            break;
-                        }
-                    }
-
-                    result.remove(token.0); // [
-                    result.remove(token.0); // left
-                    result.remove(token.0); // ,
-                    result.remove(token.0); // right
-                    result.remove(token.0); // ]
-
-                    result.insert(token.0, Token::Number {value: 0});
-
-                    return (result, true);
-                }
-
-                depth += 1;
-            },
-            Token::BracketRight => depth -= 1,
-            _ => {}
-        }
-    }
-
-    return (tokens, false);
-}
-
-fn split(tokens: Vec<Token>) -> (Vec<Token>, bool) {
-    //eprintln!("{}", format_tokens(&tokens));
-    let mut result = tokens.clone();
-
-    for token in tokens.iter().enumerate() {
-        if let Token::Number {value} = token.1 {
-            if *value >= 10 {
-                result.remove(token.0);
-                result.insert(token.0, Token::BracketLeft);
-                result.insert(token.0 + 1, Token::Number {value: (*value as f32 / 2.0).floor() as i32});
-                result.insert(token.0 + 2, Token::Comma);
-                result.insert(token.0 + 3, Token::Number {value: (*value as f32 / 2.0).ceil() as i32});
-                result.insert(token.0 + 4, Token::BracketRight);
-
-                return (result, true);
-            }
-        }
-    }
-
-    (result, false)
-}
-
-fn add_tokens(left: &[Token], right: &[Token]) -> Vec<Token> {
-    let mut result = Vec::new();
-
-    result.push(Token::BracketLeft);
-    for token in left.iter() {
-        result.push(*token);
-    }
-    result.push(Token::Comma);
-    for token in right.iter() {
-        result.push(*token);
-    }
-    result.push(Token::BracketRight);
-
-    result
-    //left.iter().copied().chain(right.iter().copied()).collect()
-}
-
-fn parse_tokens(input: &str) -> Vec<Token> {
-    let mut tokens = Vec::new();
-    let mut number = String::new();
 
     for chr in input.chars() {
         if chr.is_digit(10) {
-            number.push_str(&chr.to_string());
-        } else if !number.is_empty() {
-            tokens.push(Token::Number { value: number.parse().unwrap()});
-            number = String::new();
+            accumulator.push_str(&chr.to_string());
+        } else if !accumulator.is_empty() {
+            numbers.push(Number { depth, value: accumulator.to_string().parse().unwrap()});
+            accumulator.clear();
         }
 
         if chr == '[' {
-            tokens.push(Token::BracketLeft);
+            depth += 1;
         } else if chr == ']' {
-            tokens.push(Token::BracketRight);
-        } else if chr == ',' {
-            tokens.push(Token::Comma);
+            depth -= 1;
         }
     }
 
-    tokens
+    numbers
 }
 
-fn format_tokens(tokens: &[Token]) -> String {
-    tokens.iter().map(|token| token.format()).collect()
+fn add_and_reduce(left: &[Number], right: &[Number]) -> Vec<Number> {
+    let result = add(left, right);
+    reduce(&result)
 }
 
-fn parse(input: &str) -> Node {
-    if input.starts_with("[") {
-        let input = &input[1..input.len()-1];
-        let mut depth = 0;
+fn add(left: &[Number], right: &[Number]) -> Vec<Number> {
+    left.iter().map(clone_number_deeper).chain(
+        right.iter().map(clone_number_deeper)
+    ).collect()
+}
 
-        for chr in input.chars().enumerate() {
-            if chr.1 == '[' {
-                depth += 1;
-            } else if chr.1 == ']' {
-                depth -= 1;
-            } else if chr.1 == ',' && depth == 0 {
-                let left = &input[..chr.0];
-                let right = &input[chr.0+1..];
+fn clone_number_deeper(number: &Number) -> Number {
+    Number { value: number.value, depth: number.depth + 1}
+}
 
-                return Node::Pair {
-                    left: Box::new(parse(left)),
-                    right: Box::new(parse(right)),
-                };
+fn reduce(numbers: &[Number]) -> Vec<Number> {
+    let mut numbers = numbers.iter().copied().collect_vec();
+
+    loop {
+        loop {
+            let old_numbers = numbers.iter().copied().collect_vec();
+            numbers = explode(&numbers);
+
+            if numbers.eq(&old_numbers) {
+                break;
             }
         }
 
-        panic!();
-    } else {
-        Node::Number {value: input.parse().unwrap()}
+        let old_numbers = numbers.iter().copied().collect_vec();
+        numbers = split(&numbers);
+
+        if numbers.eq(&old_numbers) {
+            break;
+        }
     }
+
+    numbers
+}
+
+fn split(numbers: &[Number]) -> Vec<Number> {
+    let mut result = numbers.iter().copied().collect_vec();
+
+    for i in 0..result.len() {
+        let number = result[i];
+        
+        if number.value >= 10 {
+            result.remove(i);
+            result.insert(i, Number {depth: number.depth + 1, value: (number.value as f32 / 2.0).floor() as i32});
+            result.insert(i + 1, Number {depth: number.depth + 1, value: (number.value as f32 / 2.0).ceil() as i32});
+            break;
+        }
+    }
+
+    result
+}
+
+fn explode(numbers: &[Number]) -> Vec<Number> {
+    let mut result: Vec<Number> = numbers.iter().copied().collect_vec();
+
+    for i in 0..numbers.len()-1 {
+        let left = result[i];
+        let right = result[i+1];
+
+        if left.depth == 5 {
+            if i > 0 {
+                result[i-1].value += left.value;
+            }
+            result[i] = Number {depth: left.depth - 1, value: 0};
+            if i < result.len() - 2 {
+                result[i+2].value += right.value;
+            }
+            result.remove(i+1);
+            break;
+        }
+    }
+
+    result
+}
+
+fn magnitude(numbers: &[Number]) -> usize {
+    let mut numbers = numbers.iter().copied().collect_vec();
+
+    loop {
+        let max_depth = numbers.iter().map(|n| n.depth).max().unwrap();
+        if max_depth == 0 {
+            break;
+        }
+
+        let mut i = 0;
+
+        while i < numbers.len() {
+            let depth = numbers[i].depth;
+
+            if depth == max_depth {
+                let left = numbers[i].value;
+                let right = numbers[i+1].value;
+
+                numbers.remove(i); // Left
+                numbers.remove(i); // Right
+                numbers.insert(i, Number {value: (left*3) + (right*2), depth: depth - 1});
+            }
+
+            i+=1;
+        }
+    }
+
+    numbers[0].value as usize
+}
+
+fn format_numbers(numbers: &[Number]) -> String {
+    let mut numbers = numbers.iter().copied().collect_vec();
+    format_numbers_pair(&mut numbers, 1)
+}
+
+fn format_numbers_pair(numbers: &mut Vec<Number>, depth: i32) -> String {
+    let left_number = numbers[0];
+    let left = if left_number.depth == depth {
+        numbers.remove(0).value.to_string()
+    } else {
+        format_numbers_pair(numbers, depth + (left_number.depth - depth).signum())
+    };
+
+    let right_number = numbers[0];
+    let right = if right_number.depth == depth {
+        numbers.remove(0).value.to_string()
+    } else {
+        format_numbers_pair(numbers, depth + (right_number.depth - depth).signum())
+    };
+
+    return format!("[{},{}]", left, right);
 }
 
 #[cfg(test)]
@@ -290,117 +214,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_tokens_should_work() {
-        let tokens = parse_tokens("[1,20]");
-        let result = format_tokens(&tokens);
-
-        assert_eq!("[1,20]", result);
-    }
-
-    #[test]
-    fn parse_should_parse_single_pair() {
-        let result = parse("[1,2]");
-
-        assert_eq!("[1,2]", result.format());
-    }
-
-    #[test]
-    fn parse_should_parse_nested_pair() {
-        let result = parse("[[1,2],3]");
-
-        assert_eq!("[[1,2],3]", result.format());
-    }
-
-    #[test]
-    fn add_should_add_numbers() {
-        let n1 = Node::Number{value: 1};
-        let n2 = Node::Number{value: 2};
-        let result = add(n1, n2);
-
-        assert_eq!("[1,2]", result.format());
-    }
-
-    #[test]
-    fn add_should_add_pairs() {
-        let n1 = Node::Pair{left: Box::new(Node::Number{value: 1}), right: Box::new(Node::Number{value: 2})};
-        let n2 = Node::Number{value: 3};
-        let result = add(n1, n2);
-
-        assert_eq!("[[1,2],3]", result.format());
-    }
-
-    #[test]
-    fn explode_should_version1() {
-        let tokens = parse_tokens("[[6,[5,[4,[3,2]]]],1]");
-        let result = explode(tokens).0;
-
-        assert_eq!("[[6,[5,[7,0]]],3]", format_tokens(&result));
-    }
-
-    #[test]
-    fn explode_should_version2() {
-        let tokens = parse_tokens("[[[[[9,8],1],2],3],4]");
-        let result = explode(tokens).0;
-
-        assert_eq!("[[[[0,9],2],3],4]", format_tokens(&result));
-    }
-
-    #[test]
-    fn explode_should_version3() {
-        let tokens = parse_tokens("[7,[6,[5,[4,[3,2]]]]]");
-        let result = explode(tokens).0;
-
-        assert_eq!("[7,[6,[5,[7,0]]]]", format_tokens(&result));
-    }
-
-    #[test]
-    fn split_should_work() {
-        let tokens = parse_tokens("[11,1]");
-        let result = split(tokens).0;
-
-        assert_eq!("[[5,6],1]", format_tokens(&result));
-    }
-
-    #[test]
-    fn reduce_should_work() {
-        let tokens = parse_tokens("[[[[[4,3],4],4],[7,[[8,4],9]]],[1,1]]");
-        let result = reduce(tokens);
-
-        assert_eq!("[[[[0,7],4],[[7,8],[6,0]]],[8,1]]", format_tokens(&result));
-    }
-
-    #[test]
-    fn test() {
-        let left = parse_tokens("[[[[4,3],4],4],[7,[[8,4],9]]]");
-        let right = parse_tokens("[1,1]");
-        let result = add_tokens(&left, &right);
-        eprintln!("result = {:?}", format_tokens(&result));
-        let result = reduce(result);
-        eprintln!("result = {:?}", result);
-
-        assert_eq!("[[[[0,7],4],[[7,8],[6,0]]],[8,1]]", format_tokens(&result));
-    }
-
-    #[test]
-    fn magnitude() {
-        let token = parse("[[[[8,7],[7,7]],[[8,6],[7,7]]],[[[0,7],[6,6]],[8,7]]]");
-        assert_eq!(3488, token.magnitude());
-    }
-    // #[test]
-    // fn explode_should_work_with_single_pair() {
-    //     let n1 = parse("[[6,[5,[4,[3,2]]]],1]");
-    //     let result = explode(n1);
-
-    //     assert_eq!("[[6,[5,[7,0]]],3]", result.format());
-    // }
-
-    #[test]
     fn part1_should_work() {
-        let input = fs::read_to_string("input.txt").unwrap();
+        let input = fs::read_to_string("input2.txt").unwrap();
         let input = parse_input(&input);
         let result = part1(&input);
 
-        assert_eq!(3981, result);
+        assert_eq!(4140, result);
     }
 
     #[test]
@@ -412,11 +231,130 @@ mod tests {
         assert_eq!(3993, result);
     }
 
-    // #[test]
-    // fn part2_should_work() {
-    //     let input = vec![String::from("123")];
-    //     let result = part2(&input);
+    #[test]
+    fn parse_numbers_should_parse_single_level() {
+        let numbers = parse_numbers("[1,2]");
 
-    //     assert_eq!(2, result);
-    // }
+        assert_eq!(2, numbers.len());
+        assert_eq!(Number { value: 1, depth: 1}, numbers[0]);
+        assert_eq!(Number { value: 2, depth: 1}, numbers[1]);
+    }
+
+    #[test]
+    fn parse_numbers_should_parse_multiple_level() {
+        let numbers = parse_numbers("[1,[2,3]]");
+
+        assert_eq!(3, numbers.len());
+        assert_eq!(Number { value: 1, depth: 1}, numbers[0]);
+        assert_eq!(Number { value: 2, depth: 2}, numbers[1]);
+        assert_eq!(Number { value: 3, depth: 2}, numbers[2]);
+    }
+
+    #[test]
+    fn format_numbers_should_work() {
+        test_format("[1,[2,3]]");
+        test_format("[[1,2],[3,4]]");
+        test_format("[[[0,[4,5]],[0,0]],[[[4,5],[2,6]],[9,5]]]");
+        test_format("[[[[7,8],[6,7]],[[6,8],[0,8]]],[[[7,7],[5,0]],[[5,5],[5,6]]]]");
+        test_format("[[[[8,7],[7,7]],[[8,6],[7,7]]],[[[0,7],[6,6]],[8,7]]]");
+        test_format("[[[[4,0],[5,4]],[[7,0],[[7,8],5]]],[10,[[11,9],[11,0]]]]");
+    }
+
+    fn test_format(input: &str) {
+        let numbers = parse_numbers(input);
+        let result = format_numbers(&numbers);
+
+        assert_eq!(input, result);
+    }
+
+    fn assert_numbers_eq(expected: &str, numbers: &[Number]) {
+        assert_eq!(expected, format_numbers(&numbers));
+    }
+
+    #[test]
+    fn numbers_add_should_work() {
+        let left = parse_numbers("[1,2]");
+        let right = parse_numbers("[[3,4],5]");
+
+        let result = add(&left, &right);
+        assert_numbers_eq("[[1,2],[[3,4],5]]", &result);
+    }
+
+    #[test]
+    fn numbers_split_should_work() {
+        let numbers = parse_numbers("[11,2]");
+        let result = split(&numbers);
+        assert_numbers_eq("[[5,6],2]", &result);
+    }
+
+    #[test]
+    fn numbers_split_should_only_split_first() {
+        let numbers = parse_numbers("[11,[10,5]]");
+        let result = split(&numbers);
+        assert_numbers_eq("[[5,6],[10,5]]", &result);
+    }
+
+    #[test]
+    fn numbers_explode_should_work() {
+        test_explode("[[[[0,9],2],3],4]", "[[[[[9,8],1],2],3],4]");
+        test_explode("[7,[6,[5,[7,0]]]]", "[7,[6,[5,[4,[3,2]]]]]");
+        test_explode("[[6,[5,[7,0]]],3]", "[[6,[5,[4,[3,2]]]],1]");
+        test_explode("[[3,[2,[8,0]]],[9,[5,[4,[3,2]]]]]", "[[3,[2,[1,[7,3]]]],[6,[5,[4,[3,2]]]]]");
+        test_explode("[[3,[2,[8,0]]],[9,[5,[7,0]]]]", "[[3,[2,[8,0]]],[9,[5,[4,[3,2]]]]]");
+    }
+
+    fn test_explode(expected: &str, input: &str) {
+        let numbers = parse_numbers(input);
+        let result = explode(&numbers);
+        assert_numbers_eq(expected, &result);
+    }
+
+    #[test]
+    fn numbers_magnitude_should_work_for_single_pair() {
+        let numbers = parse_numbers("[1,1]");
+        let result = magnitude(&numbers);
+        assert_eq!(5, result);
+    }
+
+    #[test]
+    fn numbers_magnitude_should_work_for_nested_pairs() {
+        let numbers = parse_numbers("[[1,1], [1,1]]");
+        let result = magnitude(&numbers);
+        assert_eq!(25, result);
+    }
+
+    #[test]
+    fn reduce_should_work1() {
+        let numbers = parse_numbers("[[[[[4,3],4],4],[7,[[8,4],9]]],[1,1]]");
+        let result = reduce(&numbers);
+        assert_numbers_eq("[[[[0,7],4],[[7,8],[6,0]]],[8,1]]", &result);
+    }
+
+    #[test]
+    fn numbers_add_and_reduce_should_work() {
+        let left = parse_numbers("[[[[4,3],4],4],[7,[[8,4],9]]]");
+        let right = parse_numbers("[1,1]");
+        let result = add_and_reduce(&left, &right);
+
+        assert_eq!("[[[[0,7],4],[[7,8],[6,0]]],[8,1]]", format_numbers(&result));
+    }
+
+    #[test]
+    fn numbers_add_and_reduce_should_work1() {
+        let left = parse_numbers("[[[0,[4,5]],[0,0]],[[[4,5],[2,6]],[9,5]]]");
+        let right = parse_numbers("[7,[[[3,7],[4,3]],[[6,3],[8,8]]]]");
+        let result = add_and_reduce(&left, &right);
+
+        assert_eq!("[[[[4,0],[5,4]],[[7,7],[6,0]]],[[8,[7,7]],[[7,9],[5,0]]]]", format_numbers(&result));
+    }
+
+    #[test]
+    fn numbers_add_and_reduce_should_work2() {
+        let left = parse_numbers("[[[[4,0],[5,4]],[[7,7],[6,0]]],[[8,[7,7]],[[7,9],[5,0]]]]");
+        let right = parse_numbers("[[2,[[0,8],[3,4]]],[[[6,7],1],[7,[1,6]]]]");
+        let result = add_and_reduce(&left, &right);
+
+        assert_eq!("[[[[6,7],[6,7]],[[7,7],[0,7]]],[[[8,7],[7,7]],[[8,8],[8,0]]]]", format_numbers(&result));
+    }
 }
+
