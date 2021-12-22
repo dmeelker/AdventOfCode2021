@@ -47,28 +47,15 @@ impl Cuboid {
         Cuboid { p1, p2, area: (p2.x - p1.x) as u64 * (p2.y - p1.y) as u64 * (p2.z - p1.z) as u64}
     }
 
-    fn contains(&self, point: &Point) -> bool {
-        !(point.x < self.p1.x || point.x > self.p2.x ||
-        point.y < self.p1.y || point.y > self.p2.y ||
-        point.z < self.p1.z || point.z > self.p2.z)
-    }
-
     fn overlaps(&self, other: &Cuboid) -> bool {
-        !(self.p1.x > other.p2.x ||
-        self.p2.x < other.p1.x ||
-        self.p1.y > other.p2.y ||
-        self.p2.y < other.p1.y ||
-        self.p1.z > other.p2.z ||
-        self.p2.z < other.p1.z)
-    }
-
-    fn contains_cuboid(&self, other: &Cuboid) -> bool {
-        other.p1.x > self.p1.x &&
-        other.p2.x < self.p2.x &&
-        other.p1.y > self.p1.y &&
-        other.p2.y < self.p2.y &&
-        other.p1.z > self.p1.z &&
-        other.p2.z < self.p2.z
+        !(
+            self.p1.x > other.p2.x ||
+            self.p2.x < other.p1.x ||
+            self.p1.y > other.p2.y ||
+            self.p2.y < other.p1.y ||
+            self.p1.z > other.p2.z ||
+            self.p2.z < other.p1.z
+        )
     }
 
     fn intersect(&self, other: &Cuboid) -> Option<Cuboid> {
@@ -88,7 +75,7 @@ impl Cuboid {
             Point {x: x2, y: y2, z: z2}))
     }
 
-    fn cut(&self, other: &Cuboid) -> Vec<Cuboid> {
+    fn subtract(&self, other: &Cuboid) -> Vec<Cuboid> {
         let intersection = self.intersect(other);
 
         if let None = intersection {
@@ -96,12 +83,10 @@ impl Cuboid {
         }
 
         let intersection = intersection.unwrap();
-        //eprintln!("intersection = {:?}", intersection);
         let top_rects = self.subdivide_plane(&intersection, |p| p.x, |p| p.z);
         let front_rects = self.subdivide_plane(&intersection, |p| p.x, |p| p.y);
         let side_rects = self.subdivide_plane(&intersection, |p| p.z, |p| p.y);
-        //eprintln!("top_rects = {:#?}", top_rects);
-        //eprintln!("front_rects = {:#?}", front_rects);
+
         let mut cuboids = Vec::new();
 
         for x in 0..3 {
@@ -130,19 +115,15 @@ impl Cuboid {
         let hdivisions = self.subdivide_dimension(intersection, dimh);
         let vdivisions = self.subdivide_dimension(intersection, dimv);
 
-        vec![
-            Rect::new(hdivisions[0], vdivisions[0], hdivisions[1], vdivisions[1]),
-            Rect::new(hdivisions[1], vdivisions[0], hdivisions[2], vdivisions[1]),
-            Rect::new(hdivisions[2], vdivisions[0], hdivisions[3], vdivisions[1]),
+        let mut result = Vec::new();
+        
+        for x in 0..=2 {
+            for y in 0..=2 {
+                result.push(Rect::new(hdivisions[x], vdivisions[y], hdivisions[x+1], vdivisions[y+1]))
+            }    
+        }
 
-            Rect::new(hdivisions[0], vdivisions[1], hdivisions[1], vdivisions[2]),
-            Rect::new(hdivisions[1], vdivisions[1], hdivisions[2], vdivisions[2]),
-            Rect::new(hdivisions[2], vdivisions[1], hdivisions[3], vdivisions[2]),
-
-            Rect::new(hdivisions[0], vdivisions[2], hdivisions[1], vdivisions[3]),
-            Rect::new(hdivisions[1], vdivisions[2], hdivisions[2], vdivisions[3]),
-            Rect::new(hdivisions[2], vdivisions[2], hdivisions[3], vdivisions[3]),
-        ]
+        result
     }
 
     fn subdivide_dimension(&self, intersection: &Cuboid, dim: fn(&Point) -> i32) -> Vec<i32> {
@@ -224,50 +205,44 @@ fn create_cuboid(instruction: &Instruction) -> CuboidInstruction {
 }
 
 fn part1(instructions: &[Instruction]) -> u64 {
-    let cuboids = compute_cubes(&generate_cuboids(instructions));
+    let cuboids = compute_lit_cuboids(&generate_cuboids(instructions));
 
     let viewport = Cuboid::new(Point::new(-50, -50, -50), Point::new(51, 51, 51));
-    let mut area = 0;
-    for cuboid in cuboids.iter() {
-        if let Some(intersection) = cuboid.intersect(&viewport) {
-            area += intersection.area;
-        }
-    }
 
-    area
+    cuboids.iter()
+        .map(|c| c.intersect(&viewport))
+        .filter(|intersection| intersection.is_some())
+        .map(|intersection| intersection.unwrap().area)
+        .sum()
 }
 
 fn part2(instructions: &[Instruction]) -> u64 {
-    let cuboids = compute_cubes(&generate_cuboids(instructions));
-    cuboids.iter().map(|c| c.area).sum()
+    compute_lit_cuboids(&generate_cuboids(instructions)).iter()
+        .map(|c| c.area)
+        .sum()
 }
 
-fn compute_cubes(instructions: &[CuboidInstruction]) -> Vec<Cuboid> {
-    let mut on_cuboids = Vec::new();
+fn compute_lit_cuboids(instructions: &[CuboidInstruction]) -> Vec<Cuboid> {
+    let mut lit_cuboids = Vec::new();
 
     for instruction in instructions.iter() {
-        if instruction.on {
-            let mut cuboid = vec![instruction.cuboid.clone()];
+        let mut new_lit_cuboids = subtract(&lit_cuboids, &instruction.cuboid);
 
-            for on in on_cuboids.iter() {
-                cuboid = subtract(&cuboid, on);                
-            }
-            
-            on_cuboids.append(&mut cuboid);
-        } else {
-            on_cuboids = subtract(&on_cuboids, &instruction.cuboid);
-        }
+        if instruction.on {
+            new_lit_cuboids.push(instruction.cuboid);
+        } 
+
+        lit_cuboids = new_lit_cuboids;
     }
 
-    on_cuboids
+    lit_cuboids
 }
 
 fn subtract(cuboids: &[Cuboid], subtract: &Cuboid) -> Vec<Cuboid> {
     let mut result = Vec::new();
 
     for cuboid in cuboids.iter() {
-        let mut remainder = cuboid.cut(&subtract);
-        result.append(&mut remainder);
+        result.append(&mut cuboid.subtract(&subtract));
     }
 
     result
@@ -339,7 +314,7 @@ mod tests {
             Point {x: 4, y: 4, z: 4},
         );
 
-        let cut_results = cube1.cut(&cube2);
+        let cut_results = cube1.subtract(&cube2);
 
         assert_eq!(1, cut_results.len());
         assert_eq!(&Cuboid::new(
@@ -360,7 +335,7 @@ mod tests {
             Point {x: 3, y: 4, z: 3},
         );
 
-        let cut_results = cube1.cut(&cube2);
+        let cut_results = cube1.subtract(&cube2);
         eprintln!("cut_results = {:#?}", cut_results);
         assert_eq!(8, cut_results.len());
     }
@@ -377,7 +352,7 @@ mod tests {
             Point {x: 3, y: 3, z: 4},
         );
     
-        let cut_results = cube1.cut(&cube2);
+        let cut_results = cube1.subtract(&cube2);
         assert_eq!(8, cut_results.len());
     }
 
@@ -393,7 +368,7 @@ mod tests {
             Point {x: 4, y: 3, z: 3},
         );
     
-        let cut_results = cube1.cut(&cube2);
+        let cut_results = cube1.subtract(&cube2);
         assert_eq!(8, cut_results.len());
     }
 
